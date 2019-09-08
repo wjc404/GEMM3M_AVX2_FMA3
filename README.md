@@ -1,5 +1,5 @@
 # GEMM3M_AVX2_FMA3
-cgemm3m and zgemm3m subroutines for large matrices, using AVX2 and FMA3 instructions, outperform MKL 2018.
+cgemm3m and zgemm3m subroutines for large matrices, using AVX2 and FMA3 instructions, outperform MKL 2019 update 4.
 
 
 Tuned parameters on i9-9900K:
