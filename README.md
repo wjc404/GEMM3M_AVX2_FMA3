@@ -1,6 +1,7 @@
 # GEMM3M_AVX2_FMA3
 cgemm3m and zgemm3m subroutines for large matrices, using AVX2 and FMA3 instructions, outperform MKL 2019 update 4.
 
+Interface: FORTRAN, 32-bit integer.
 
 Tuned parameters on i9-9900K (see Makefile):
 
