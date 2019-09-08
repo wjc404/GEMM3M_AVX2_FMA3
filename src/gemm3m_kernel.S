@@ -3,7 +3,7 @@
 #define CL      %r14 //cload pointer
 #define CS      %r15 //cstore pointer
 #define LDC     %rcx //ldc * sizeof(float)
-#define AL      %rax //aload pointer
+#define AL      %rax //aload pointer; please note that this register is used for loading masks instead in the function gemmblktailccc
 #define CIP  -8(%rsp)//cstartpos
 //BlkDimK=BlkDimN=256
 //A_PR_BYTE=256
@@ -203,119 +203,119 @@
 //SP vector c1(low->high):-C1_1,-C2_1,-C1_2,-C2_2,-C1_3,-C2_3,-C1_4,-C2_4;
 //SP output vector 1(low->high):C1_1,-C1_1,C1_2,-C1_2,C1_3,-C1_3,C1_4,-C1_4;
 //SP output vector 2(low->high):C2_1,-C2_1,C2_2,-C2_2,C2_3,-C2_3,C2_4,-C2_4;
-.macro STORECBLK_1vec_mArBr reg,mem
+.macro STORECBLK_1vec_mArBr reg,csoffset
     UNPACKC1 \reg,%ymm0
     UNPACKC2 \reg,%ymm1
-    vmovups \mem,%ymm2
+    vmovups \csoffset(CS),%ymm2
     VEC_ADDSUB %ymm0,%ymm2,%ymm0
-    vmovups %ymm0,\mem
-    vmovups 32+\mem,%ymm3
+    vmovups %ymm0,\csoffset(CS)
+    vmovups 32+\csoffset(CS),%ymm3
     VEC_ADDSUB %ymm1,%ymm3,%ymm1
-    vmovups %ymm1,32+\mem
+    vmovups %ymm1,32+\csoffset(CS)
 .endm
 
 .macro STORECBLK_1col_mArBr
-    STORECBLK_1vec_mArBr %ymm4,(CS)
-    STORECBLK_1vec_mArBr %ymm5,64(CS)
-    STORECBLK_1vec_mArBr %ymm6,128(CS)
+    STORECBLK_1vec_mArBr %ymm4,0
+    STORECBLK_1vec_mArBr %ymm5,64
+    STORECBLK_1vec_mArBr %ymm6,128
     addq LDC,CS
 .endm
 
 //SP vector c1(low->high):-C1_1,-C2_1,-C1_2,-C2_2,-C1_3,-C2_3,-C1_4,-C2_4;
 //SP output vector 1(low->high):-C1_1,-C1_1,-C1_2,-C1_2,-C1_3,-C1_3,-C1_4,-C1_4;
 //SP output vector 2(low->high):-C2_1,-C2_1,-C2_2,-C2_2,-C2_3,-C2_3,-C2_4,-C2_4;
-.macro STORECBLK_1vec_mAiBi reg,mem
+.macro STORECBLK_1vec_mAiBi reg,csoffset
     UNPACKC1 \reg,%ymm0
     UNPACKC2 \reg,%ymm1
-    VEC_ADD \mem,%ymm0,%ymm0
-    vmovups %ymm0,\mem
-    VEC_ADD 32+\mem,%ymm1,%ymm1
-    vmovups %ymm1,32+\mem
+    VEC_ADD \csoffset(CS),%ymm0,%ymm0
+    vmovups %ymm0,\csoffset(CS)
+    VEC_ADD 32+\csoffset(CS),%ymm1,%ymm1
+    vmovups %ymm1,32+\csoffset(CS)
 .endm
 
 .macro STORECBLK_1col_mAiBi
-    STORECBLK_1vec_mAiBi %ymm4,(CS)
-    STORECBLK_1vec_mAiBi %ymm5,64(CS)
-    STORECBLK_1vec_mAiBi %ymm6,128(CS)
+    STORECBLK_1vec_mAiBi %ymm4,0
+    STORECBLK_1vec_mAiBi %ymm5,64
+    STORECBLK_1vec_mAiBi %ymm6,128
     addq LDC,CS
 .endm
 
 //SP vector c1(low->high):C1_1,C2_1,C1_2,C2_2,C1_3,C2_3,C1_4,C2_4;
 //SP output vector 1(low->high):0,C1_1,0,C1_2,0,C1_3,0,C1_4;
 //SP output vector 2(low->high):0,C2_1,0,C2_2,0,C2_3,0,C2_4;
-.macro STORECBLK_1vec_AsBs reg,mem
+.macro STORECBLK_1vec_AsBs reg,csoffset
     UNPACKZRC1 \reg,%ymm1
     UNPACKZRC2 \reg,%ymm2
-    VEC_ADD \mem,%ymm1,%ymm1
-    vmovups %ymm1,\mem
-    VEC_ADD 32+\mem,%ymm2,%ymm2
-    vmovups %ymm2,32+\mem
+    VEC_ADD \csoffset(CS),%ymm1,%ymm1
+    vmovups %ymm1,\csoffset(CS)
+    VEC_ADD 32+\csoffset(CS),%ymm2,%ymm2
+    vmovups %ymm2,32+\csoffset(CS)
 .endm
 
 .macro STORECBLK_1col_AsBs
-    STORECBLK_1vec_AsBs %ymm4,(CS)
-    STORECBLK_1vec_AsBs %ymm5,64(CS)
-    STORECBLK_1vec_AsBs %ymm6,128(CS)
+    STORECBLK_1vec_AsBs %ymm4,0
+    STORECBLK_1vec_AsBs %ymm5,64
+    STORECBLK_1vec_AsBs %ymm6,128
     addq LDC,CS
 .endm
 
-.macro STORECBLK_1vec_mArBr_irregm reg,mem,mask
+.macro STORECBLK_1vec_mArBr_irregm reg,csoffset,maskoffset
     UNPACKC1 \reg,%ymm0
     UNPACKC2 \reg,%ymm1
-    vmovups \mask,%ymm3
-    MASKMOV \mem,%ymm3,%ymm2
+    vmovups \maskoffset(%rax),%ymm3
+    MASKMOV \csoffset(CS),%ymm3,%ymm2
     VEC_ADDSUB %ymm0,%ymm2,%ymm2
-    MASKMOV %ymm2,%ymm3,\mem
-    vmovups 32+\mask,%ymm3
-    MASKMOV 32+\mem,%ymm3,%ymm2
+    MASKMOV %ymm2,%ymm3,\csoffset(CS)
+    vmovups 32+\maskoffset(%rax),%ymm3
+    MASKMOV 32+\csoffset(CS),%ymm3,%ymm2
     VEC_ADDSUB %ymm1,%ymm2,%ymm2
-    MASKMOV %ymm2,%ymm3,32+\mem
+    MASKMOV %ymm2,%ymm3,32+\csoffset(CS)
 .endm
 
-.macro STORECBLK_1col_mArBr_irregm mask
-    STORECBLK_1vec_mArBr_irregm %ymm4,(CS),(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm5,64(CS),64(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm6,128(CS),128(\mask)
+.macro STORECBLK_1col_mArBr_irregm
+    STORECBLK_1vec_mArBr_irregm %ymm4,0,0
+    STORECBLK_1vec_mArBr_irregm %ymm5,64,64
+    STORECBLK_1vec_mArBr_irregm %ymm6,128,128
     addq LDC,CS
 .endm
 
-.macro STORECBLK_1vec_mAiBi_irregm reg,mem,mask
+.macro STORECBLK_1vec_mAiBi_irregm reg,csoffset,maskoffset
     UNPACKC1 \reg,%ymm0
     UNPACKC2 \reg,%ymm1
-    vmovups \mask,%ymm3
-    MASKMOV \mem,%ymm3,%ymm2
+    vmovups \maskoffset(%rax),%ymm3
+    MASKMOV \csoffset(CS),%ymm3,%ymm2
     VEC_ADD %ymm2,%ymm0,%ymm2
-    MASKMOV %ymm2,%ymm3,\mem
-    vmovups 32+\mask,%ymm3
-    MASKMOV 32+\mem,%ymm3,%ymm2
+    MASKMOV %ymm2,%ymm3,\csoffset(CS)
+    vmovups 32+\maskoffset(%rax),%ymm3
+    MASKMOV 32+\csoffset(CS),%ymm3,%ymm2
     VEC_ADD %ymm2,%ymm1,%ymm1
-    MASKMOV %ymm1,%ymm3,32+\mem
+    MASKMOV %ymm1,%ymm3,32+\csoffset(CS)
 .endm
 
-.macro STORECBLK_1col_mAiBi_irregm mask
-    STORECBLK_1vec_mAiBi_irregm %ymm4,(CS),(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm5,64(CS),64(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm6,128(CS),128(\mask)
+.macro STORECBLK_1col_mAiBi_irregm
+    STORECBLK_1vec_mAiBi_irregm %ymm4,0,0
+    STORECBLK_1vec_mAiBi_irregm %ymm5,64,64
+    STORECBLK_1vec_mAiBi_irregm %ymm6,128,128
     addq LDC,CS
 .endm
 
-.macro STORECBLK_1vec_AsBs_irregm reg,mem,mask
+.macro STORECBLK_1vec_AsBs_irregm reg,csoffset,maskoffset
     UNPACKZRC1 \reg,%ymm0
     UNPACKZRC2 \reg,%ymm1
-    vmovups \mask,%ymm3
-    MASKMOV \mem,%ymm3,%ymm2
+    vmovups \maskoffset(%rax),%ymm3
+    MASKMOV \csoffset(CS),%ymm3,%ymm2
     VEC_ADD %ymm2,%ymm0,%ymm2
-    MASKMOV %ymm2,%ymm3,\mem
-    vmovups 32+\mask,%ymm3
-    MASKMOV 32+\mem,%ymm3,%ymm2
+    MASKMOV %ymm2,%ymm3,\csoffset(CS)
+    vmovups 32+\maskoffset(%rax),%ymm3
+    MASKMOV 32+\csoffset(CS),%ymm3,%ymm2
     VEC_ADD %ymm2,%ymm1,%ymm2
-    MASKMOV %ymm2,%ymm3,32+\mem
+    MASKMOV %ymm2,%ymm3,32+\csoffset(CS)
 .endm
 
-.macro STORECBLK_1col_AsBs_irregm mask
-    STORECBLK_1vec_AsBs_irregm %ymm4,(CS),(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm5,64(CS),64(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm6,128(CS),128(\mask)
+.macro STORECBLK_1col_AsBs_irregm
+    STORECBLK_1vec_AsBs_irregm %ymm4,0,0
+    STORECBLK_1vec_AsBs_irregm %ymm5,64,64
+    STORECBLK_1vec_AsBs_irregm %ymm6,128,128
     addq LDC,CS
 .endm
 
@@ -326,87 +326,87 @@
 .endm
 
 .macro FIN_C_3col_mArBr
-    STORECBLK_1vec_mArBr %ymm7,(CS)
-    STORECBLK_1vec_mArBr %ymm8,64(CS)
-    STORECBLK_1vec_mArBr %ymm9,128(CS)
+    STORECBLK_1vec_mArBr %ymm7,0
+    STORECBLK_1vec_mArBr %ymm8,64
+    STORECBLK_1vec_mArBr %ymm9,128
     addq LDC,CS
-    STORECBLK_1vec_mArBr %ymm10,(CS)
-    STORECBLK_1vec_mArBr %ymm11,64(CS)
-    STORECBLK_1vec_mArBr %ymm12,128(CS)
+    STORECBLK_1vec_mArBr %ymm10,0
+    STORECBLK_1vec_mArBr %ymm11,64
+    STORECBLK_1vec_mArBr %ymm12,128
     addq LDC,CS
-    STORECBLK_1vec_mArBr %ymm13,(CS)
-    STORECBLK_1vec_mArBr %ymm14,64(CS)
-    STORECBLK_1vec_mArBr %ymm15,128(CS)
+    STORECBLK_1vec_mArBr %ymm13,0
+    STORECBLK_1vec_mArBr %ymm14,64
+    STORECBLK_1vec_mArBr %ymm15,128
 .endm
 
 .macro FIN_C_3col_mAiBi
-    STORECBLK_1vec_mAiBi %ymm7,(CS)
-    STORECBLK_1vec_mAiBi %ymm8,64(CS)
-    STORECBLK_1vec_mAiBi %ymm9,128(CS)
+    STORECBLK_1vec_mAiBi %ymm7,0
+    STORECBLK_1vec_mAiBi %ymm8,64
+    STORECBLK_1vec_mAiBi %ymm9,128
     addq LDC,CS
-    STORECBLK_1vec_mAiBi %ymm10,(CS)
-    STORECBLK_1vec_mAiBi %ymm11,64(CS)
-    STORECBLK_1vec_mAiBi %ymm12,128(CS)
+    STORECBLK_1vec_mAiBi %ymm10,0
+    STORECBLK_1vec_mAiBi %ymm11,64
+    STORECBLK_1vec_mAiBi %ymm12,128
     addq LDC,CS
-    STORECBLK_1vec_mAiBi %ymm13,(CS)
-    STORECBLK_1vec_mAiBi %ymm14,64(CS)
-    STORECBLK_1vec_mAiBi %ymm15,128(CS)
+    STORECBLK_1vec_mAiBi %ymm13,0
+    STORECBLK_1vec_mAiBi %ymm14,64
+    STORECBLK_1vec_mAiBi %ymm15,128
 .endm
 
 .macro FIN_C_3col_AsBs
-    STORECBLK_1vec_AsBs %ymm7,(CS)
-    STORECBLK_1vec_AsBs %ymm8,64(CS)
-    STORECBLK_1vec_AsBs %ymm9,128(CS)
+    STORECBLK_1vec_AsBs %ymm7,0
+    STORECBLK_1vec_AsBs %ymm8,64
+    STORECBLK_1vec_AsBs %ymm9,128
     addq LDC,CS
-    STORECBLK_1vec_AsBs %ymm10,(CS)
-    STORECBLK_1vec_AsBs %ymm11,64(CS)
-    STORECBLK_1vec_AsBs %ymm12,128(CS)
+    STORECBLK_1vec_AsBs %ymm10,0
+    STORECBLK_1vec_AsBs %ymm11,64
+    STORECBLK_1vec_AsBs %ymm12,128
     addq LDC,CS
-    STORECBLK_1vec_AsBs %ymm13,(CS)
-    STORECBLK_1vec_AsBs %ymm14,64(CS)
-    STORECBLK_1vec_AsBs %ymm15,128(CS)
+    STORECBLK_1vec_AsBs %ymm13,0
+    STORECBLK_1vec_AsBs %ymm14,64
+    STORECBLK_1vec_AsBs %ymm15,128
 .endm
 
-.macro FIN_C_3col_mArBr_irregm mask
-    STORECBLK_1vec_mArBr_irregm %ymm7,(CS),(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm8,64(CS),64(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm9,128(CS),128(\mask)
+.macro FIN_C_3col_mArBr_irregm
+    STORECBLK_1vec_mArBr_irregm %ymm7,0,0
+    STORECBLK_1vec_mArBr_irregm %ymm8,64,64
+    STORECBLK_1vec_mArBr_irregm %ymm9,128,128
     addq LDC,CS
-    STORECBLK_1vec_mArBr_irregm %ymm10,(CS),(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm11,64(CS),64(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm12,128(CS),128(\mask)
+    STORECBLK_1vec_mArBr_irregm %ymm10,0,0
+    STORECBLK_1vec_mArBr_irregm %ymm11,64,64
+    STORECBLK_1vec_mArBr_irregm %ymm12,128,128
     addq LDC,CS
-    STORECBLK_1vec_mArBr_irregm %ymm13,(CS),(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm14,64(CS),64(\mask)
-    STORECBLK_1vec_mArBr_irregm %ymm15,128(CS),128(\mask)
+    STORECBLK_1vec_mArBr_irregm %ymm13,0,0
+    STORECBLK_1vec_mArBr_irregm %ymm14,64,64
+    STORECBLK_1vec_mArBr_irregm %ymm15,128,128
 .endm
 
-.macro FIN_C_3col_mAiBi_irregm mask
-    STORECBLK_1vec_mAiBi_irregm %ymm7,(CS),(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm8,64(CS),64(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm9,128(CS),128(\mask)
+.macro FIN_C_3col_mAiBi_irregm
+    STORECBLK_1vec_mAiBi_irregm %ymm7,0,0
+    STORECBLK_1vec_mAiBi_irregm %ymm8,64,64
+    STORECBLK_1vec_mAiBi_irregm %ymm9,128,128
     addq LDC,CS
-    STORECBLK_1vec_mAiBi_irregm %ymm10,(CS),(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm11,64(CS),64(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm12,128(CS),128(\mask)
+    STORECBLK_1vec_mAiBi_irregm %ymm10,0,0
+    STORECBLK_1vec_mAiBi_irregm %ymm11,64,64
+    STORECBLK_1vec_mAiBi_irregm %ymm12,128,128
     addq LDC,CS
-    STORECBLK_1vec_mAiBi_irregm %ymm13,(CS),(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm14,64(CS),64(\mask)
-    STORECBLK_1vec_mAiBi_irregm %ymm15,128(CS),128(\mask)
+    STORECBLK_1vec_mAiBi_irregm %ymm13,0,0
+    STORECBLK_1vec_mAiBi_irregm %ymm14,64,64
+    STORECBLK_1vec_mAiBi_irregm %ymm15,128,128
 .endm
 
-.macro FIN_C_3col_AsBs_irregm mask
-    STORECBLK_1vec_AsBs_irregm %ymm7,(CS),(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm8,64(CS),64(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm9,128(CS),128(\mask)
+.macro FIN_C_3col_AsBs_irregm
+    STORECBLK_1vec_AsBs_irregm %ymm7,0,0
+    STORECBLK_1vec_AsBs_irregm %ymm8,64,64
+    STORECBLK_1vec_AsBs_irregm %ymm9,128,128
     addq LDC,CS
-    STORECBLK_1vec_AsBs_irregm %ymm10,(CS),(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm11,64(CS),64(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm12,128(CS),128(\mask)
+    STORECBLK_1vec_AsBs_irregm %ymm10,0,0
+    STORECBLK_1vec_AsBs_irregm %ymm11,64,64
+    STORECBLK_1vec_AsBs_irregm %ymm12,128,128
     addq LDC,CS
-    STORECBLK_1vec_AsBs_irregm %ymm13,(CS),(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm14,64(CS),64(\mask)
-    STORECBLK_1vec_AsBs_irregm %ymm15,128(CS),128(\mask)
+    STORECBLK_1vec_AsBs_irregm %ymm13,0,0
+    STORECBLK_1vec_AsBs_irregm %ymm14,64,64
+    STORECBLK_1vec_AsBs_irregm %ymm15,128,128
 .endm
 
 .macro SETMASKm//use stack to store mask integer array
@@ -773,7 +773,7 @@ gemmblktailccc:
     cmpq $BlkDimK/32,%r11
     jb .Linner_tail_mArBr
 
-    STORECBLK_1col_mArBr_irregm %rax
+    STORECBLK_1col_mArBr_irregm
     incq %r12
     movswq %r10w,%r9
     subq %r9,A0
@@ -782,7 +782,7 @@ gemmblktailccc:
     jb .Louter_tail_mArBr
 
     movq CIP,CS
-    FIN_C_3col_mArBr_irregm %rax
+    FIN_C_3col_mArBr_irregm
 
 /*then do -A(i)B(i)*/
     addq $96*BlkDimK,A0
@@ -798,7 +798,7 @@ gemmblktailccc:
     cmpq $BlkDimK/32,%r11
     jb .Linner_tail_mAiBi
 
-    STORECBLK_1col_mAiBi_irregm %rax
+    STORECBLK_1col_mAiBi_irregm
     incq %r12
     movswq %r10w,%r9
     subq %r9,A0
@@ -807,7 +807,7 @@ gemmblktailccc:
     jb .Louter_tail_mAiBi
 
     movq CIP,CS
-    FIN_C_3col_mAiBi_irregm %rax
+    FIN_C_3col_mAiBi_irregm
 
 /*finally do A(i+r)B(i+r)*/
     addq $96*BlkDimK,A0
@@ -823,7 +823,7 @@ gemmblktailccc:
     cmpq $BlkDimK/32,%r11
     jb .Linner_tail_AsBs
 
-    STORECBLK_1col_AsBs_irregm %rax
+    STORECBLK_1col_AsBs_irregm
     incq %r12
     movswq %r10w,%r9
     subq %r9,A0
@@ -832,7 +832,7 @@ gemmblktailccc:
     jb .Louter_tail_AsBs
 
     movq CIP,CS
-    FIN_C_3col_AsBs_irregm %rax
+    FIN_C_3col_AsBs_irregm
 
 /*clean up and return*/
     vzeroupper
